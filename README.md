@@ -11,13 +11,13 @@ A [Pi](https://github.com/earendil-works/pi) extension that replaces the built-i
 Install permanently from this repository:
 
 ```bash
-pi install git:github.com/maasha/fuzzy-autocomplete
+pi install git:github.com/maasha/pi-fuzzy-autocomplete
 ```
 
 Or try it once without installing:
 
 ```bash
-pi -e git:github.com/maasha/fuzzy-autocomplete
+pi -e git:github.com/maasha/pi-fuzzy-autocomplete
 ```
 
 ### From a local path
@@ -25,8 +25,8 @@ pi -e git:github.com/maasha/fuzzy-autocomplete
 Clone the repo and load the extension directly:
 
 ```bash
-git clone https://github.com/maasha/fuzzy-autocomplete.git
-pi --extension ./fuzzy-autocomplete
+git clone https://github.com/maasha/pi-fuzzy-autocomplete.git
+pi --extension ./pi-fuzzy-autocomplete
 ```
 
 Or add it to your project's Pi settings:
@@ -35,7 +35,7 @@ Or add it to your project's Pi settings:
 {
   "packages": [
     {
-      "source": "./fuzzy-autocomplete"
+      "source": "./pi-fuzzy-autocomplete"
     }
   ]
 }
