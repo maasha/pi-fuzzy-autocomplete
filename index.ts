@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type {
   AutocompleteItem,
@@ -9,6 +11,11 @@ import {
   compareItemsByFuzzyScore,
   type ScoredItem,
 } from "./item-scorer.ts";
+import {
+  parseFuzzignoreContent,
+  isIgnored,
+  type FuzzPattern,
+} from "./ignore.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -23,6 +30,12 @@ interface FileCache {
   cwd: string;
   timestamp: number;
 }
+
+// Directories that are never useful in autocomplete, regardless of config.
+const DEFAULT_EXCLUDES = [".git", ".mypy_cache", "__pycache__", "node_modules"];
+
+// Project-level ignore file (gitignore syntax), read from the project root.
+const FUZZIGNORE_FILE = ".fuzzignore";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -61,6 +74,30 @@ export function createFuzzyAutocompleteProvider(
 ): AutocompleteProvider
 {
   let fileCache: FileCache | undefined;
+  let ignoreCache: {
+    patterns: FuzzPattern[];
+    cwd: string;
+    timestamp: number;
+  } | undefined;
+
+  async function getIgnorePatterns(): Promise<FuzzPattern[]> {
+    if (
+      ignoreCache &&
+      ignoreCache.cwd === cwd &&
+      Date.now() - ignoreCache.timestamp < FILE_CACHE_TTL_MS
+    ) {
+      return ignoreCache.patterns;
+    }
+    const patterns: FuzzPattern[] = [];
+    try {
+      const content = await fs.readFile(join(cwd, FUZZIGNORE_FILE), "utf8");
+      patterns.push(...parseFuzzignoreContent(content));
+    } catch {
+      // No .fuzzignore — nothing extra to ignore.
+    }
+    ignoreCache = { patterns, cwd, timestamp: Date.now() };
+    return patterns;
+  }
 
   async function tryExec(
     command: string,
@@ -90,14 +127,34 @@ export function createFuzzyAutocompleteProvider(
 
     let files: string[] | undefined;
 
-    files = await tryExec("fd", ["--type", "f", "--strip-cwd-prefix"]);
+    const excludeArgs = DEFAULT_EXCLUDES.flatMap((d) => [
+      "--exclude",
+      d,
+    ]);
+
+    files = await tryExec("fd", [
+      "--type", "f",
+      "--strip-cwd-prefix",
+      ...excludeArgs,
+    ]);
 
     if (!files) {
-      files = await tryExec("fdfind", ["--type", "f", "--strip-cwd-prefix"]);
+      files = await tryExec("fdfind", [
+        "--type", "f",
+        "--strip-cwd-prefix",
+        ...excludeArgs,
+      ]);
     }
 
     if (!files) {
-      const findResult = await tryExec("find", [".", "-type", "f"]);
+      const notPathArgs = DEFAULT_EXCLUDES.flatMap((d) => [
+        "-not", "-path", `*/${d}/*`,
+      ]);
+      const findResult = await tryExec("find", [
+        ".",
+        ...notPathArgs,
+        "-type", "f",
+      ]);
       if (findResult) {
         files = findResult.map((f) => f.replace(/^\.\//, ""));
       }
@@ -105,6 +162,12 @@ export function createFuzzyAutocompleteProvider(
 
     if (!files) {
       files = [];
+    }
+
+    // Apply project-level ignore rules (.fuzzignore).
+    const patterns = await getIgnorePatterns();
+    if (patterns.length > 0) {
+      files = files.filter((f) => !isIgnored(f, patterns));
     }
 
     if (files.length > MAX_FILE_LIST_SIZE) {

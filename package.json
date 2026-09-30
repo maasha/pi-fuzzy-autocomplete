@@ -27,6 +27,7 @@
     "fuzzy-score.ts",
     "tokenizer.ts",
     "item-scorer.ts",
+    "ignore.ts",
     "*.test.ts",
     "README.md"
   ],

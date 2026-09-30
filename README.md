@@ -41,22 +41,22 @@ Or add it to your project's Pi settings:
 }
 ```
 
-No build step is required — Pi compiles TypeScript on the fly with `jiti`.
+No build step is required.
 
 ## What it does
 
-When you type `@` followed by a query in Pi's input box, this extension searches all files in the current project and ranks them using a VS Code–style fuzzy match algorithm. Results are highlighted in bold so you can see *why* each file matched.
+When you type `@` followed by a query in Pi's input box, this extension searches all files in the current project and ranks them with a fuzzy match algorithm. Results are highlighted in bold so you can see *which characters* matched.
 
-| Query | Matches | Why it matches |
-|-------|---------|----------------|
+| Query | Matches | Why |
+|-------|---------|-----|
 | `@reme` | `README.md` | `R…E…M…E` (non-contiguous subsequence) |
-| `@usrctrl` | `src/user/controller.ts` | `usr` matches `user`, `ctrl` matches `controller` |
+| `@usrctrl` | `src/user/controller.ts` | `usr` → `user`, `ctrl` → `controller` |
 | `@src "controller.ts"` | `src/user/controller.ts` | Exact token `"controller.ts"` + fuzzy `src` |
-| `@tset` | `tokenizer.test.ts` | `t…s…e…t` matches across words and case boundaries |
+| `@tset` | `tokenizer.test.ts` | `t…s…e…t` across words and case boundaries |
 
 ## Examples
 
-### Example 1: Typo-tolerant file search
+### Typo-tolerant file search
 
 You have this project layout:
 
@@ -65,26 +65,22 @@ You have this project layout:
 ├── package.json
 ├── src/
 │   ├── tokenizer.ts
-│   ├── fuzzy-score.ts
 │   └── index.ts
 └── tests/
-    ├── tokenizer.test.ts
-    └── fuzzy-score.test.ts
+    └── tokenizer.test.ts
 ```
 
-You type `@` and want the tokenizer test file but your fingers slip:
+You want the tokenizer test file but your fingers slip:
 
 ```
 @toknizertest
 ```
 
-**Result:** `tests/tokenizer.test.ts` appears because the fuzzy scorer tolerates the missing `e` and still finds a high-scoring subsequence match.
+**Result:** `tests/tokenizer.test.ts` still ranks on top — the scorer tolerates the missing `e`.
 
 ---
 
-### Example 2: Navigating deeply nested code
-
-Project layout:
+### Navigating deeply nested code
 
 ```
 ├── src/
@@ -96,22 +92,17 @@ Project layout:
 │       └── utils.ts
 ```
 
-You type:
+Type:
 
 ```
 @usrctrl
 ```
 
-**Result:** `src/user/controller.ts` ranks highest because:
-- `usr` matches the start of `user` (word boundary bonus)
-- `ctrl` matches the start of `controller` (word boundary bonus)
-- The match is shallower than `src/admin/controller.ts` if that existed
+**Result:** `src/user/controller.ts` ranks highest — matches at word starts score higher, and shallower paths win ties.
 
 ---
 
-### Example 3: Filtering by exact filename across directories
-
-Project layout:
+### Filtering by exact filename across directories
 
 ```
 ├── api/
@@ -128,29 +119,27 @@ You want only the `web` controller:
 @web "controller.ts"
 ```
 
-**Result:** `web/controller.ts` is shown; `api/controller.ts` and `mobile/controller.ts` are excluded because the exact token `"controller.ts"` only matches if both tokens match — and `web` doesn't appear in the other paths.
+**Result:** `web/controller.ts` — the only path containing both `web` and an exact `controller.ts`.
 
 ---
 
-### Example 4: Consecutive-character priority
-
-Query:
-
-```
-@fuzzy
-```
+### Consecutive-character priority
 
 Given two files:
 - `fuzzy-score.ts`
 - `file-for-you-to-see.ts`
 
-**Result:** `fuzzy-score.ts` wins because the characters `f-u-z-z-y` appear consecutively, earning a much higher score than the scattered match in `file-for-you-to-see.ts`.
+Type:
+
+```
+@fuzzy
+```
+
+**Result:** `fuzzy-score.ts` wins — consecutive matches rank above scattered ones.
 
 ---
 
-### Example 5: CamelCase boundary matching
-
-Project layout:
+### CamelCase boundary matching
 
 ```
 ├── src/
@@ -158,19 +147,17 @@ Project layout:
 │   └── filedialog.test.ts
 ```
 
-Query:
+Type:
 
 ```
 @fD
 ```
 
-**Result:** `src/fileDialog.ts` ranks above `src/filedialog.test.ts` because matching the lowercase-to-uppercase transition (`f` → `D`) earns a CamelCase boundary bonus.
+**Result:** `src/fileDialog.ts` ranks above `src/filedialog.test.ts` — the `f` → `D` case boundary is a strong signal.
 
 ---
 
-### Example 6: Multi-token narrowing
-
-Project layout:
+### Multi-token narrowing
 
 ```
 ├── src/
@@ -182,40 +169,25 @@ Project layout:
 │       └── About.tsx
 ```
 
-Query:
+Type:
 
 ```
 @comp btn
 ```
 
-**Result:** `src/components/Button.tsx` is shown because:
-- `comp` matches `components`
-- `btn` matches `Button`
-- `src/pages/Home.tsx` is excluded because neither token matches
-
----
+**Result:** `src/components/Button.tsx` — every token must match for a file to appear.
 
 ## Features
 
-### VS Code–Style Fuzzy Scoring
-
-The scoring algorithm is ported from VS Code's `filters.ts` and assigns bonuses for:
-
-- **Word boundaries** — matches at the start of CamelCase words or after separators (`/`, `-`, `_`, `.`)
-- **Consecutive characters** — runs of matched characters score higher than scattered ones
-- **Case transitions** — matching lowercase-to-uppercase boundaries (e.g., `d` → `D` in `fileDialog`)
-- **Prefix and exact matches** — starting a match at position 0 or matching the entire filename
-- **Path depth** — shallower files rank above deeply nested ones when scores are tied
-
 ### Multi-Token Queries (AND Semantics)
 
-Separate tokens with spaces. Every token must match for a file to appear.
+Separate tokens with spaces. Every token must match for a file to appear:
 
 ```
 @user ctrl
 ```
 
-This finds files that match `user` **and** `ctrl` independently — perfect for narrowing results by directory and filename.
+Finds files matching `user` **and** `ctrl` — great for narrowing by directory and filename at once.
 
 ### Quoted Exact Tokens
 
@@ -225,37 +197,53 @@ Wrap a token in quotes to require an exact (case-sensitive) substring match inst
 @src "controller.ts"
 ```
 
-Here `src` is matched fuzzily anywhere in the path, but `controller.ts` must appear exactly as written.
+`src` still matches fuzzily, but `controller.ts` must appear exactly as written.
 
 ### Path-Aware Matching
 
-If a token contains `/` or `\`, the scorer gives extra weight to directory-segment matches, so `@src/con` strongly prefers `src/controller.ts` over files that merely contain `s`, `r`, `c`, `c`, `o`, `n` somewhere in their name.
+If a token contains `/` or `\`, matches in directory segments are weighted more heavily, so `@src/con` strongly prefers `src/controller.ts`.
 
-### Performance Capping
+### Ignoring Noisy Directories
 
-- File list is cached for 30 seconds per session
-- Results are culled during scoring to keep latency low in large repositories
-- Gracefully falls back to Pi's built-in provider when `fd`/`find` is unavailable or no candidates match
+A handful of directories are always skipped (`.git/`, `.mypy_cache/`, `__pycache__/`, `node_modules/`). To control anything beyond that, add a **`.fuzzignore`** file to your project root using `.gitignore`-style patterns:
 
-## Architecture
+```gitignore
+# .fuzzignore — skip generated output
+build/
+*.gen.ts
+dist...
+!dist/keep.txt
+```
 
-| File | Role |
-|------|------|
-| `index.ts` | Extension entry point. Registers the `AutocompleteProvider` wrapper, handles file discovery (`fd` → `fdfind` → `find`), and formats suggestions with bold highlights |
-| `fuzzy-score.ts` | Core scoring algorithm — computes fuzzy match scores and positions |
-| `item-scorer.ts` | Orchestrates multi-token scoring, path-aware logic, and final ranking (score → depth → length → lexicographic) |
-| `tokenizer.ts` | Splits user input into fuzzy and exact query tokens |
-| `*.test.ts` | Unit tests for each module |
+Supported syntax:
+
+| Syntax | Meaning |
+|--------|---------|
+| `# comment` | Blank lines and `#` comments are ignored |
+| `!pattern` | Negate — un-ignore a path (last matching pattern wins) |
+| `dir/` | Trailing `/` — match a directory at any depth (and everything under it) |
+| `/pattern` | Leading `/` — anchor to the project root |
+| `name` | Bare name — match a path segment at any depth |
+| `*` | Zero or more characters (never crosses `/`) |
+| `?` | Exactly one character |
+| `**` | Zero or more path segments (e.g. `logs/**`) |
+| `path...` | Trailing `...` — match the named path and everything under it |
+
+Examples of what each line does:
+
+- `build/` — skips `build/x.js` and `packages/x/build/x.js`
+- `*.gen.ts` — skips `src/app.gen.ts` anywhere
+- `dist...` — skips the entire `dist/` subtree
+- `!dist/keep.txt` — keeps a specific file inside an otherwise ignored directory
+
+No `.fuzzignore` is required — the built-in exclusions keep suggestions clean for most projects.
 
 ## Development
 
-Run tests with [tsx](https://github.com/privatenumber/tsx):
+Run the test suite:
 
 ```bash
-npx tsx --test fuzzy-score.test.ts
-npx tsx --test item-scorer.test.ts
-npx tsx --test index.test.ts
-npx tsx --test perf.test.ts
+npx tsx --test
 ```
 
 ## License
